@@ -1,0 +1,34 @@
+server:
+  port: ${APP_PORT:5120}
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+spring:
+  application:
+    name: fair-scale
+  datasource:
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:13399}/${DB_NAME:fairscale}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:scale_root_pwd}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      connection-timeout: 30000
+      initialization-fail-timeout: 60000
+
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+    default-fetch-size: 100
+    default-statement-timeout: 30
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:fair-scale-market-metrology-supervision-secret-key-please-change-in-prod}
+    expire-minutes: ${JWT_EXPIRE_MINUTES:720}
+
+logging:
+  level:
+    com.market.scale: info

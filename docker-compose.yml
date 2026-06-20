@@ -1,0 +1,42 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: fairscale-db
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: scale_root_pwd
+      MYSQL_DATABASE: fairscale
+      TZ: Asia/Shanghai
+      LANG: C.UTF-8
+    ports:
+      - "13399:3306"
+    volumes:
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - fairscale-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pscale_root_pwd"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: .
+    container_name: fairscale-api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_PORT: 5120
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: fairscale
+      DB_USER: root
+      DB_PASSWORD: scale_root_pwd
+      JWT_SECRET: fair-scale-market-metrology-supervision-secret-key-please-change-in-prod
+      JWT_EXPIRE_MINUTES: 720
+      TZ: Asia/Shanghai
+    ports:
+      - "5120:5120"
+
+volumes:
+  fairscale-data:
