@@ -51,9 +51,7 @@ public class RecheckService {
 
         List<Scale> stallScales = scaleMapper.findByStall(req.getStallId());
         for (Scale s : stallScales) {
-            if (ScaleStatus.isSuspended(s.getStatus())) {
-                throw ApiException.badRequest("该摊位存在停用器具[" + s.getAssetNo() + "]，不允许复称业务");
-            }
+            statusService.ensureUsable(s);
         }
 
         if (req.getActualWeightG() > req.getClaimedWeightG()) {

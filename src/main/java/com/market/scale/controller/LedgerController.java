@@ -4,6 +4,7 @@ import com.market.scale.common.ApiResult;
 import com.market.scale.entity.Scale;
 import com.market.scale.entity.VerificationRecord;
 import com.market.scale.mapper.ScaleMapper;
+import com.market.scale.mapper.ScaleStatusLogMapper;
 import com.market.scale.mapper.VerificationRecordMapper;
 import com.market.scale.security.RequireRole;
 import com.market.scale.service.ScaleService;
@@ -21,13 +22,16 @@ public class LedgerController {
     private final ScaleService scaleService;
     private final ScaleStatusService statusService;
     private final VerificationRecordMapper recordMapper;
+    private final ScaleStatusLogMapper statusLogMapper;
 
     public LedgerController(ScaleMapper scaleMapper, ScaleService scaleService,
-                            ScaleStatusService statusService, VerificationRecordMapper recordMapper) {
+                            ScaleStatusService statusService, VerificationRecordMapper recordMapper,
+                            ScaleStatusLogMapper statusLogMapper) {
         this.scaleMapper = scaleMapper;
         this.scaleService = scaleService;
         this.statusService = statusService;
         this.recordMapper = recordMapper;
+        this.statusLogMapper = statusLogMapper;
     }
 
     @GetMapping
@@ -85,10 +89,8 @@ public class LedgerController {
         int totalVerifyCount = recordMapper.countByScaleId(scale.getId());
         item.put("totalVerifyCount", totalVerifyCount);
 
-        List<VerificationRecord> records = recordMapper.findByScaleId(scale.getId());
-        boolean everOverdueUsed = records.stream()
-                .anyMatch(r -> "unqualified".equals(r.getConclusion()));
-        item.put("everOverdueUsed", everOverdueUsed);
+        int overdueSuspensionCount = statusLogMapper.countOverdueSuspensions(scale.getId());
+        item.put("everOverdueUsed", overdueSuspensionCount > 0);
 
         return item;
     }

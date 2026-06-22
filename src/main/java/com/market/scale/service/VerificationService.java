@@ -7,10 +7,14 @@ import com.market.scale.dto.VerificationRecordRequest;
 import com.market.scale.entity.*;
 import com.market.scale.mapper.*;
 import com.market.scale.statemachine.ScaleStatus;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -18,14 +22,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Service
 public class VerificationService {
 
-    private static final DateTimeFormatter PLAN_NO_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
-    private static final AtomicInteger SEQUENCE = new AtomicInteger(0);
+    private static final DateTimeFormatter PLAN_NO_FMT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
     private final VerificationPlanMapper planMapper;
     private final VerificationPlanItemMapper planItemMapper;
     private final VerificationRecordMapper recordMapper;
     private final ScaleMapper scaleMapper;
     private final ScaleStatusService statusService;
+
+    @Autowired
+    @Lazy
+    private VerificationService self;
 
     public VerificationService(VerificationPlanMapper planMapper,
                                VerificationPlanItemMapper planItemMapper,
@@ -82,7 +89,9 @@ public class VerificationService {
         planItemMapper.batchInsert(items);
 
         for (Scale s : scales) {
-            statusService.toPendingVerify(s.getId(), "排入检定计划[" + planNo + "]", operatedBy);
+            if (ScaleStatus.IN_USE.getCode().equals(s.getStatus())) {
+                statusService.toPendingVerify(s.getId(), "排入检定计划[" + planNo + "]", operatedBy);
+            }
         }
 
         plan.setStatus("sent");
@@ -105,7 +114,7 @@ public class VerificationService {
         return createPlan(req, operatedBy);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public VerificationRecord submitVerification(VerificationRecordRequest req, String operatedBy) {
         Scale scale = scaleMapper.findById(req.getScaleId());
         if (scale == null) {
@@ -113,14 +122,21 @@ public class VerificationService {
         }
 
         String conclusion = req.getConclusion();
+        if (!"qualified".equals(conclusion) && !"unqualified".equals(conclusion) && !"limited_use".equals(conclusion)) {
+            throw ApiException.badRequest("无效的检定结论: " + conclusion);
+        }
+
         LocalDate verifiedAt = req.getVerifiedAt();
         int cycleDays = scale.getVerifyCycleDays() != null ? scale.getVerifyCycleDays() : 365;
 
         LocalDate nextVerifyDate;
         LocalDate validUntil;
 
-        if ("qualified".equals(conclusion)) {
-            if (req.getLimitedUseDays() != null && req.getLimitedUseDays() > 0) {
+        if ("qualified".equals(conclusion) || "limited_use".equals(conclusion)) {
+            if ("limited_use".equals(conclusion)) {
+                if (req.getLimitedUseDays() == null || req.getLimitedUseDays() <= 0) {
+                    throw ApiException.badRequest("限用结论必须提供限用天数");
+                }
                 nextVerifyDate = verifiedAt.plusDays(req.getLimitedUseDays());
                 validUntil = nextVerifyDate;
             } else {
@@ -147,8 +163,9 @@ public class VerificationService {
         record.setRemark(req.getRemark());
         recordMapper.insert(record);
 
-        if ("qualified".equals(conclusion)) {
+        if ("qualified".equals(conclusion) || "limited_use".equals(conclusion)) {
             statusService.toVerifiedPass(scale.getId(), operatedBy);
+            scale = scaleMapper.findById(scale.getId());
 
             scale.setVerifiedAt(verifiedAt);
             scale.setNextVerifyDate(nextVerifyDate);
@@ -158,16 +175,8 @@ public class VerificationService {
             statusService.toInUse(scale.getId(), operatedBy);
         } else if ("unqualified".equals(conclusion)) {
             statusService.toVerifiedFail(scale.getId(), operatedBy);
+            scale = scaleMapper.findById(scale.getId());
             statusService.suspendFailedScale(scale.getId(), operatedBy);
-        } else if ("limited_use".equals(conclusion)) {
-            statusService.toVerifiedPass(scale.getId(), operatedBy);
-
-            scale.setVerifiedAt(verifiedAt);
-            scale.setNextVerifyDate(nextVerifyDate);
-            scale.setCurrentSealNo(req.getSealNo());
-            scaleMapper.update(scale);
-
-            statusService.toInUse(scale.getId(), operatedBy);
         }
 
         updatePlanItemResult(req.getPlanId(), req.getScaleId(), conclusion, null);
@@ -175,7 +184,6 @@ public class VerificationService {
         return record;
     }
 
-    @Transactional
     public Map<String, Object> batchSubmitVerification(BatchVerificationRequest req, String operatedBy) {
         List<BatchVerificationRequest.ItemEntry> items = req.getItems();
         if (items == null || items.isEmpty()) {
@@ -199,7 +207,7 @@ public class VerificationService {
                 recordReq.setLimitedUseDays(entry.getLimitedUseDays());
                 recordReq.setRemark(entry.getRemark());
 
-                VerificationRecord saved = submitVerification(recordReq, operatedBy);
+                VerificationRecord saved = self.submitVerification(recordReq, operatedBy);
                 Map<String, Object> ok = new HashMap<>();
                 ok.put("scaleId", entry.getScaleId());
                 ok.put("assetNo", entry.getAssetNo());
@@ -212,12 +220,20 @@ public class VerificationService {
                 fail.put("assetNo", entry.getAssetNo());
                 fail.put("reason", e.getMessage());
                 failures.add(fail);
-                updatePlanItemResult(req.getPlanId(), entry.getScaleId(), "failed", e.getMessage());
+                try {
+                    updatePlanItemResult(req.getPlanId(), entry.getScaleId(), "failed", e.getMessage());
+                } catch (Exception ex) {
+                    // ignore
+                }
             }
         }
 
         if (req.getPlanId() != null) {
-            updatePlanCompletionStatus(req.getPlanId());
+            try {
+                updatePlanCompletionStatus(req.getPlanId());
+            } catch (Exception e) {
+                // ignore
+            }
         }
 
         Map<String, Object> result = new HashMap<>();
@@ -276,12 +292,12 @@ public class VerificationService {
     }
 
     private String generatePlanNo() {
-        String datePart = LocalDate.now().format(PLAN_NO_FMT);
-        int seq = SEQUENCE.incrementAndGet();
-        return "VP-" + datePart + "-" + String.format("%04d", seq);
+        return "VP-" + LocalDateTime.now().format(PLAN_NO_FMT) + "-" +
+                String.format("%04d", (int) (Math.random() * 10000));
     }
 
-    private void updatePlanItemResult(Long planId, Long scaleId, String result, String failReason) {
+    @Transactional
+    protected void updatePlanItemResult(Long planId, Long scaleId, String result, String failReason) {
         if (planId == null) {
             return;
         }
@@ -296,7 +312,8 @@ public class VerificationService {
         }
     }
 
-    private void updatePlanCompletionStatus(Long planId) {
+    @Transactional
+    protected void updatePlanCompletionStatus(Long planId) {
         List<VerificationPlanItem> items = planItemMapper.findByPlanId(planId);
         boolean allDone = true;
         boolean anyFailed = false;

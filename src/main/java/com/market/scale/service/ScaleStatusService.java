@@ -99,8 +99,22 @@ public class ScaleStatusService {
         if (scale == null) {
             throw ApiException.notFound("计量器具不存在");
         }
-        if (!ScaleStatus.isUsable(scale.getStatus())) {
+        ensureUsable(scale);
+    }
+
+    public void ensureUsable(Scale scale) {
+        String status = scale.getStatus();
+        if (ScaleStatus.VERIFYING.getCode().equals(status)) {
+            throw ApiException.badRequest("器具[" + scale.getAssetNo() + "]正在检定中，不允许参与业务");
+        }
+        if (ScaleStatus.VERIFIED_FAIL.getCode().equals(status)) {
+            throw ApiException.badRequest("器具[" + scale.getAssetNo() + "]检定不合格，不允许参与业务");
+        }
+        if (ScaleStatus.SUSPENDED.getCode().equals(status)) {
             throw ApiException.badRequest("器具[" + scale.getAssetNo() + "]已停用，不允许参与称重业务");
+        }
+        if (!ScaleStatus.isUsable(status)) {
+            throw ApiException.badRequest("器具[" + scale.getAssetNo() + "]状态异常，不允许参与业务");
         }
         if (isExpired(scale)) {
             throw ApiException.badRequest("器具[" + scale.getAssetNo() + "]已超过检定有效期，不允许参与称重业务");

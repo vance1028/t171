@@ -23,4 +23,8 @@ public interface ScaleStatusLogMapper {
             "VALUES(#{scaleId}, #{fromStatus}, #{toStatus}, #{reason}, #{operatedBy}, NOW())")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(ScaleStatusLog log);
+
+    @Select("SELECT COUNT(*) FROM scale_status_logs WHERE scale_id = #{scaleId} AND to_status = 'suspended' " +
+            "AND (reason LIKE '%超期%' OR reason LIKE '%过期%' OR reason LIKE '%overdue%')")
+    int countOverdueSuspensions(Long scaleId);
 }

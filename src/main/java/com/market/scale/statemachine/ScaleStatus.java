@@ -19,7 +19,7 @@ public enum ScaleStatus {
     private static final Map<ScaleStatus, Set<ScaleStatus>> TRANSITIONS = Map.of(
             IN_USE, Set.of(PENDING_VERIFY, SUSPENDED),
             SUSPENDED, Set.of(PENDING_VERIFY),
-            PENDING_VERIFY, Set.of(VERIFYING, SUSPENDED),
+            PENDING_VERIFY, Set.of(VERIFYING, VERIFIED_PASS, VERIFIED_FAIL, SUSPENDED),
             VERIFYING, Set.of(VERIFIED_PASS, VERIFIED_FAIL),
             VERIFIED_PASS, Set.of(IN_USE),
             VERIFIED_FAIL, Set.of(SUSPENDED)
