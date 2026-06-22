@@ -15,7 +15,9 @@ public class Scale {
     private Integer maxCapacityG;  // 最大称量，单位克
     private LocalDate verifiedAt;  // 上次检定日期
     private Integer verifyCycleDays; // 检定有效周期（天）
-    private String status;         // in_use / sealed / scrapped
+    private LocalDate nextVerifyDate; // 下次检定日期
+    private String currentSealNo;    // 当前铅封号
+    private String status;         // in_use / suspended / pending_verify / verifying / verified_pass / verified_fail
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -42,6 +44,12 @@ public class Scale {
 
     public Integer getVerifyCycleDays() { return verifyCycleDays; }
     public void setVerifyCycleDays(Integer verifyCycleDays) { this.verifyCycleDays = verifyCycleDays; }
+
+    public LocalDate getNextVerifyDate() { return nextVerifyDate; }
+    public void setNextVerifyDate(LocalDate nextVerifyDate) { this.nextVerifyDate = nextVerifyDate; }
+
+    public String getCurrentSealNo() { return currentSealNo; }
+    public void setCurrentSealNo(String currentSealNo) { this.currentSealNo = currentSealNo; }
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }

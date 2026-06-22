@@ -5,8 +5,10 @@ import com.market.scale.dto.RecheckRequest;
 import com.market.scale.entity.RecheckRecord;
 import com.market.scale.entity.Stall;
 import com.market.scale.mapper.RecheckRecordMapper;
+import com.market.scale.mapper.ScaleMapper;
 import com.market.scale.mapper.StallMapper;
 import com.market.scale.service.RecheckService;
+import com.market.scale.service.ScaleStatusService;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -17,7 +19,9 @@ class RecheckServiceTest {
 
     private final RecheckRecordMapper recheckMapper = mock(RecheckRecordMapper.class);
     private final StallMapper stallMapper = mock(StallMapper.class);
-    private final RecheckService service = new RecheckService(recheckMapper, stallMapper);
+    private final ScaleMapper scaleMapper = mock(ScaleMapper.class);
+    private final ScaleStatusService statusService = mock(ScaleStatusService.class);
+    private final RecheckService service = new RecheckService(recheckMapper, stallMapper, scaleMapper, statusService);
 
     private RecheckRequest req(int claimed, int actual) {
         RecheckRequest r = new RecheckRequest();

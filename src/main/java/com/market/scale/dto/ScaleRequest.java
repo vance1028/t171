@@ -18,6 +18,7 @@ public class ScaleRequest {
     private LocalDate verifiedAt;
     @Positive(message = "检定周期必须为正数")
     private Integer verifyCycleDays;
+    private String currentSealNo;
     private String status;
 
     public Long getStallId() { return stallId; }
@@ -40,6 +41,9 @@ public class ScaleRequest {
 
     public Integer getVerifyCycleDays() { return verifyCycleDays; }
     public void setVerifyCycleDays(Integer verifyCycleDays) { this.verifyCycleDays = verifyCycleDays; }
+
+    public String getCurrentSealNo() { return currentSealNo; }
+    public void setCurrentSealNo(String currentSealNo) { this.currentSealNo = currentSealNo; }
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }

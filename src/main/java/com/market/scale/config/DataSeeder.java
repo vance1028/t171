@@ -95,6 +95,7 @@ public class DataSeeder implements ApplicationRunner {
         sc.setMaxCapacityG(cap);
         sc.setVerifiedAt(verified);
         sc.setVerifyCycleDays(cycle);
+        sc.setNextVerifyDate(verified.plusDays(cycle));
         sc.setStatus("in_use");
         return sc;
     }

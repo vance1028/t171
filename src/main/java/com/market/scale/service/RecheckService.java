@@ -3,8 +3,11 @@ package com.market.scale.service;
 import com.market.scale.common.ApiException;
 import com.market.scale.dto.RecheckRequest;
 import com.market.scale.entity.RecheckRecord;
+import com.market.scale.entity.Scale;
 import com.market.scale.mapper.RecheckRecordMapper;
+import com.market.scale.mapper.ScaleMapper;
 import com.market.scale.mapper.StallMapper;
+import com.market.scale.statemachine.ScaleStatus;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -17,10 +20,15 @@ public class RecheckService {
 
     private final RecheckRecordMapper recheckMapper;
     private final StallMapper stallMapper;
+    private final ScaleMapper scaleMapper;
+    private final ScaleStatusService statusService;
 
-    public RecheckService(RecheckRecordMapper recheckMapper, StallMapper stallMapper) {
+    public RecheckService(RecheckRecordMapper recheckMapper, StallMapper stallMapper,
+                          ScaleMapper scaleMapper, ScaleStatusService statusService) {
         this.recheckMapper = recheckMapper;
         this.stallMapper = stallMapper;
+        this.scaleMapper = scaleMapper;
+        this.statusService = statusService;
     }
 
     public Map<String, Object> page(Long stallId, String result, int page, int size) {
@@ -40,6 +48,14 @@ public class RecheckService {
         if (stallMapper.findById(req.getStallId()) == null) {
             throw ApiException.badRequest("摊位不存在");
         }
+
+        List<Scale> stallScales = scaleMapper.findByStall(req.getStallId());
+        for (Scale s : stallScales) {
+            if (ScaleStatus.isSuspended(s.getStatus())) {
+                throw ApiException.badRequest("该摊位存在停用器具[" + s.getAssetNo() + "]，不允许复称业务");
+            }
+        }
+
         if (req.getActualWeightG() > req.getClaimedWeightG()) {
             throw ApiException.badRequest("实测重量大于计价重量，请核对录入");
         }

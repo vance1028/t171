@@ -5,6 +5,7 @@ import com.market.scale.dto.ScaleRequest;
 import com.market.scale.entity.Scale;
 import com.market.scale.mapper.ScaleMapper;
 import com.market.scale.mapper.StallMapper;
+import com.market.scale.statemachine.ScaleStatus;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -17,10 +18,12 @@ public class ScaleService {
 
     private final ScaleMapper scaleMapper;
     private final StallMapper stallMapper;
+    private final ScaleStatusService statusService;
 
-    public ScaleService(ScaleMapper scaleMapper, StallMapper stallMapper) {
+    public ScaleService(ScaleMapper scaleMapper, StallMapper stallMapper, ScaleStatusService statusService) {
         this.scaleMapper = scaleMapper;
         this.stallMapper = stallMapper;
+        this.statusService = statusService;
     }
 
     public Map<String, Object> page(int page, int size) {
@@ -28,6 +31,19 @@ public class ScaleService {
         int s = Math.min(Math.max(size, 1), 200);
         List<Scale> rows = scaleMapper.findPage((p - 1) * s, s);
         long total = scaleMapper.count();
+        Map<String, Object> result = new HashMap<>();
+        result.put("items", rows);
+        result.put("total", total);
+        result.put("page", p);
+        result.put("size", s);
+        return result;
+    }
+
+    public Map<String, Object> search(Long stallId, String status, String marketName, int page, int size) {
+        int p = Math.max(page, 1);
+        int s = Math.min(Math.max(size, 1), 200);
+        List<Scale> rows = scaleMapper.search(stallId, status, marketName, (p - 1) * s, s);
+        long total = scaleMapper.countSearch(stallId, status, marketName);
         Map<String, Object> result = new HashMap<>();
         result.put("items", rows);
         result.put("total", total);
@@ -59,7 +75,11 @@ public class ScaleService {
         scale.setMaxCapacityG(req.getMaxCapacityG());
         scale.setVerifiedAt(req.getVerifiedAt());
         scale.setVerifyCycleDays(req.getVerifyCycleDays() == null ? 365 : req.getVerifyCycleDays());
-        scale.setStatus(req.getStatus() == null ? "in_use" : req.getStatus());
+        if (req.getVerifiedAt() != null && scale.getVerifyCycleDays() != null) {
+            scale.setNextVerifyDate(req.getVerifiedAt().plusDays(scale.getVerifyCycleDays()));
+        }
+        scale.setCurrentSealNo(req.getCurrentSealNo());
+        scale.setStatus(req.getStatus() == null ? ScaleStatus.IN_USE.getCode() : req.getStatus());
         scaleMapper.insert(scale);
         return scale;
     }
@@ -73,6 +93,12 @@ public class ScaleService {
         if (req.getVerifyCycleDays() != null) {
             scale.setVerifyCycleDays(req.getVerifyCycleDays());
         }
+        if (req.getVerifiedAt() != null && scale.getVerifyCycleDays() != null) {
+            scale.setNextVerifyDate(req.getVerifiedAt().plusDays(scale.getVerifyCycleDays()));
+        }
+        if (req.getCurrentSealNo() != null) {
+            scale.setCurrentSealNo(req.getCurrentSealNo());
+        }
         if (req.getStatus() != null) {
             scale.setStatus(req.getStatus());
         }
@@ -85,14 +111,11 @@ public class ScaleService {
         scaleMapper.delete(id);
     }
 
-    /**
-     * 判断器具检定是否已过期：上次检定日期 + 周期 < 今天。
-     */
     public boolean isExpired(Scale scale) {
-        if (scale.getVerifiedAt() == null || scale.getVerifyCycleDays() == null) {
-            return true;
-        }
-        LocalDate due = scale.getVerifiedAt().plusDays(scale.getVerifyCycleDays());
-        return due.isBefore(LocalDate.now());
+        return statusService.isExpired(scale);
+    }
+
+    public long daysUntilNextVerify(Scale scale) {
+        return statusService.daysUntilNextVerify(scale);
     }
 }
